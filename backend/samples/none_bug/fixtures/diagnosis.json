@@ -1,0 +1,7 @@
+{
+  "root_cause": "divide() has no guard for None inputs, causing an unhandled TypeError at runtime.",
+  "affected_file": "src/calculator.py",
+  "affected_lines": [13, 14, 15],
+  "explanation": "The function divide(a, b) performs the division a / b without first checking whether a or b is None. When either argument is None, Python raises a TypeError ('unsupported operand type(s) for /: NoneType and int') instead of the expected ValueError. Adding an explicit None-check before the division and raising ValueError corrects the behaviour.",
+  "confidence": 0.97
+}

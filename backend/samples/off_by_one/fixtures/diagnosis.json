@@ -1,0 +1,7 @@
+{
+  "root_cause": "last_element() uses index len(items) - 0 instead of len(items) - 1, returning an IndexError on non-empty lists.",
+  "affected_file": "src/list_utils.py",
+  "affected_lines": [12],
+  "explanation": "The function last_element(items) attempts to access items[len(items)] which is one past the final valid index. Python list indexing is zero-based, so the last element is at index len(items) - 1. Using len(items) raises an IndexError for any non-empty list. Changing the index expression to len(items) - 1 corrects the off-by-one error.",
+  "confidence": 0.95
+}

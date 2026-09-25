@@ -1,0 +1,79 @@
+.terminal-panel {
+  background: #0C1117;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 320px;
+}
+
+.terminal-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.terminal-panel-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.terminal-body {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  max-height: 280px;
+}
+
+.terminal-empty {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.terminal-line {
+  white-space: pre-wrap;
+  color: var(--text-primary);
+}
+
+.terminal-line--command {
+  color: var(--pulse-blue);
+}
+
+.terminal-line--fail {
+  color: var(--pulse-red);
+}
+
+.terminal-line--pass {
+  color: var(--pulse-teal);
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 13px;
+  background: var(--pulse-teal);
+  animation: blink 0.9s steps(1) infinite;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}

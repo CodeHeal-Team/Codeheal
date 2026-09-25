@@ -1,0 +1,3 @@
+{
+  "diff": "diff --git a/src/list_utils.py b/src/list_utils.py\nindex 0000001..0000002 100644\n--- a/src/list_utils.py\n+++ b/src/list_utils.py\n@@ -9,5 +9,5 @@ def last_element(items):\n     if not items:\n         raise ValueError(\"list is empty\")\n-    return items[len(items)]  # BUG: off-by-one\n+    return items[len(items) - 1]\n"
+}

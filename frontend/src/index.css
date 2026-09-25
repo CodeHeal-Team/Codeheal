@@ -1,0 +1,43 @@
+:root {
+  /* Base palette — "vitals monitor" direction */
+  --bg-deep: #10161C;        /* main background, deep charcoal-navy */
+  --bg-panel: #161D25;       /* panel background, one step up */
+  --bg-panel-raised: #1C242E;/* hovered / active panel */
+  --line: #2A333E;           /* hairline borders */
+  --text-primary: #E8EDF2;
+  --text-muted: #7C8B9B;
+
+  /* Status accents */
+  --pulse-teal: #3DDCB4;     /* healthy / passing / verified */
+  --pulse-amber: #F2B84B;    /* in progress / fixing */
+  --pulse-red: #F2664B;      /* failing / broken */
+  --pulse-blue: #5AA9E6;     /* analyzing / informational */
+
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}

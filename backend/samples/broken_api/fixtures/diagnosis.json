@@ -1,0 +1,7 @@
+{
+  "root_cause": "The route key 'hello' is stored in ROUTES as a Cyrillic 'о' instead of ASCII 'o', causing a KeyError when looked up.",
+  "affected_file": "src/router.py",
+  "affected_lines": [10],
+  "explanation": "ROUTES is keyed with the string 'hell\u043e' where the final character is the Cyrillic letter 'о' (U+043E), not the ASCII letter 'o' (U+006F). A call to dispatch('hello', ...) uses the correct ASCII key and therefore fails with a KeyError because that key does not exist in the dict. Replacing the Cyrillic character with ASCII 'o' in the ROUTES definition resolves the issue.",
+  "confidence": 0.99
+}

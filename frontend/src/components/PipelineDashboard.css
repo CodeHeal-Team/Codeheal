@@ -1,0 +1,173 @@
+.pipeline-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.pipeline-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pipeline-panel-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.run-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--pulse-teal);
+  color: #0B1512;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.run-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.run-button:disabled {
+  background: var(--bg-panel-raised);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.run-spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid rgba(124, 139, 155, 0.35);
+  border-top-color: var(--text-muted);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Stepper */
+.stepper {
+  display: flex;
+  align-items: flex-start;
+}
+
+.stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 10px;
+}
+
+.stepper-node-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.stepper-node {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-raised);
+  color: var(--text-muted);
+  transition: all 200ms ease;
+}
+
+.stepper-node--active {
+  border-color: var(--pulse-amber);
+  color: var(--pulse-amber);
+  box-shadow: 0 0 0 4px rgba(242, 184, 75, 0.14);
+}
+
+.stepper-node--done {
+  border-color: var(--pulse-teal);
+  background: rgba(61, 220, 180, 0.12);
+  color: var(--pulse-teal);
+}
+
+.stepper-line {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  margin: 0 4px;
+  transition: background 200ms ease;
+}
+
+.stepper-line.is-done {
+  background: var(--pulse-teal);
+  opacity: 0.5;
+}
+
+.stepper-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stepper-label--active {
+  color: var(--pulse-amber);
+  font-weight: 600;
+}
+
+.stepper-label--done {
+  color: var(--text-primary);
+}
+
+/* Status feedback badges */
+.pipeline-panel-footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.status-badge--idle {
+  color: var(--text-muted);
+}
+
+.status-badge--fail {
+  color: var(--pulse-red);
+  border-color: rgba(242, 102, 75, 0.35);
+  background: rgba(242, 102, 75, 0.08);
+}
+
+.status-badge--progress {
+  color: var(--pulse-amber);
+  border-color: rgba(242, 184, 75, 0.35);
+  background: rgba(242, 184, 75, 0.08);
+}
+
+.status-badge--pass {
+  color: var(--pulse-teal);
+  border-color: rgba(61, 220, 180, 0.35);
+  background: rgba(61, 220, 180, 0.08);
+}

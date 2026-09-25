@@ -1,0 +1,130 @@
+.diff-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 320px;
+}
+
+.diff-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.diff-panel-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.diff-file {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.diff-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.diff-empty p {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.diff-empty small {
+  font-size: 12px;
+}
+
+.diff-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  flex: 1;
+}
+
+.diff-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.diff-column-label {
+  font-size: 11px;
+  font-weight: 600;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 5px;
+}
+
+.diff-column-label--before {
+  color: var(--pulse-red);
+  background: rgba(242, 102, 75, 0.1);
+}
+
+.diff-column-label--after {
+  color: var(--pulse-teal);
+  background: rgba(61, 220, 180, 0.1);
+}
+
+.diff-code {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  background: #0C1117;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 0;
+  overflow-x: auto;
+}
+
+.diff-line {
+  display: flex;
+  gap: 10px;
+  padding: 0 12px;
+  white-space: pre;
+}
+
+.diff-gutter {
+  flex-shrink: 0;
+  width: 10px;
+  color: var(--text-muted);
+}
+
+.diff-line--removed {
+  background: rgba(242, 102, 75, 0.07);
+  color: #F2B4A6;
+}
+
+.diff-line--removed .diff-gutter {
+  color: var(--pulse-red);
+}
+
+.diff-line--added {
+  background: rgba(61, 220, 180, 0.07);
+  color: #B6ECDD;
+}
+
+.diff-line--added .diff-gutter {
+  color: var(--pulse-teal);
+}
+
+@media (max-width: 640px) {
+  .diff-columns {
+    grid-template-columns: 1fr;
+  }
+}

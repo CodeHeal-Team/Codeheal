@@ -1,0 +1,114 @@
+.scenario-selector {
+  position: relative;
+}
+
+.scenario-trigger {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 260px;
+  color: var(--text-primary);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.scenario-trigger:hover {
+  border-color: #3A4553;
+  background: var(--bg-panel-raised);
+}
+
+.scenario-trigger-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.scenario-trigger-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scenario-trigger-file {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.scenario-chevron {
+  color: var(--text-muted);
+  transition: transform 150ms ease;
+  flex-shrink: 0;
+}
+
+.scenario-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.scenario-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 20;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.scenario-option {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-primary);
+  transition: background 120ms ease;
+}
+
+.scenario-option:hover {
+  background: var(--bg-panel);
+}
+
+.scenario-option.is-selected {
+  border-color: rgba(61, 220, 180, 0.35);
+  background: rgba(61, 220, 180, 0.06);
+}
+
+.scenario-option-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scenario-option-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scenario-option-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.scenario-option-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}

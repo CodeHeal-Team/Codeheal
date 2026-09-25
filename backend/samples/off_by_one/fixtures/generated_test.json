@@ -1,0 +1,4 @@
+{
+  "filename": "tests/test_generated.py",
+  "code": "import sys\nimport os\nsys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))\n\nimport pytest\nfrom list_utils import last_element\n\n\ndef test_last_element_raises_index_error():\n    \"\"\"Generated test: last_element([1, 2, 3]) must not raise IndexError.\"\"\"\n    with pytest.raises(IndexError):\n        last_element([1, 2, 3])\n"
+}

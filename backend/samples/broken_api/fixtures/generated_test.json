@@ -1,0 +1,4 @@
+{
+  "filename": "tests/test_generated.py",
+  "code": "import sys\nimport os\nsys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))\n\nimport pytest\nfrom router import dispatch\n\n\ndef test_hello_route_key_error():\n    \"\"\"Generated test: dispatch('hello', ...) must not raise KeyError.\"\"\"\n    with pytest.raises(KeyError):\n        dispatch('hello', 'World')\n"
+}

@@ -1,0 +1,3 @@
+{
+  "diff": "diff --git a/src/calculator.py b/src/calculator.py\nindex 0000001..0000002 100644\n--- a/src/calculator.py\n+++ b/src/calculator.py\n@@ -12,4 +12,8 @@ def add(a, b):\n \n def divide(a, b):\n-    # BUG: no None-guard — crashes with TypeError when a or b is None\n-    return a / b\n+    if a is None or b is None:\n+        raise ValueError(\"divide() does not accept None arguments\")\n+    return a / b\n"
+}
