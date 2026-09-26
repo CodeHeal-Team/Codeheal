@@ -1,14 +1,16 @@
 # IBM Bob 2.0 Development Evidence
 
-This folder contains screenshots documenting IBM Bob 2.0's assistance during CodeHeal development.
+This folder contains screenshots documenting CodeHeal development and the deployed application.
 
-Add the genuine screenshots captured from the project's Bob task sessions. Keep the screenshots readable and avoid including API keys, access tokens, or other secrets.
+Keep screenshots readable and make sure they do not expose API keys, access tokens, or other secrets.
 
-Suggested evidence to include:
+## Screenshots
 
-1. `backend-pipeline.png` — backend core pipeline task/session summary.
-2. `response-parser-summary.png` — `response_parser.py` task completion summary.
-3. `module-validation.png` — Module 1 and Module 2 validation results.
-4. `integration-tests.png` — integration test results.
+1. `01-backend-pipeline.png` — backend core pipeline task/session summary.
+2. `02-response-parser-summary.png` — response parser task completion summary.
+3. `03-validation-and-tests.png` — module validation and test results.
+4. `04-live-application.png` — screenshot of the deployed CodeHeal frontend.
 
-Use the actual filenames if they differ, and update the evidence links in the root README accordingly. These suggested filenames are organizational examples, not claims that the screenshots are already present.
+The first three images document development and validation. The fourth is a live-application screenshot; it does not replace screenshots of IBM Bob task-session summaries.
+
+See the [root README](../../README.md) for links to each image.
