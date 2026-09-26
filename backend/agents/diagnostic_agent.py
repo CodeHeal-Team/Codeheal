@@ -13,12 +13,19 @@ class DiagnosticAgent(WatsonxAgent):
     Analyses source files and failing test output to produce a diagnosis.
     """
 
-    def run(self, request: DiagnosisRequest) -> str:
-        prompt = self._build_prompt(request)
+    def run(
+        self,
+        request: DiagnosisRequest,
+        retry_instructions: str = "",
+    ) -> str:
+        prompt = self._build_prompt(request, retry_instructions)
         return self.generate(prompt)
 
     @staticmethod
-    def _build_prompt(request: DiagnosisRequest) -> str:
+    def _build_prompt(
+        request: DiagnosisRequest,
+        retry_instructions: str = "",
+    ) -> str:
         """
         Construct the prompt sent to the model.
         """
@@ -46,5 +53,6 @@ class DiagnosticAgent(WatsonxAgent):
             '  "explanation": "explain why the code fails",\n'
             '  "confidence": 0.9\n'
             "}\n"
+            f"RETRY INSTRUCTIONS: {retry_instructions or 'No retry; this is the initial attempt.'}\n"
         )
         return "".join(parts)
