@@ -59,6 +59,4 @@ class TestGeneratorAgent(WatsonxAgent):
             '{"filename":"tests/test_generated.py",'
             '"code":"from src.calculator import divide\\n\\n'
             'def test_example():\\n    ..."}'
-            "\n\nBegin your JSON response now:\n"
-            "{"
         )

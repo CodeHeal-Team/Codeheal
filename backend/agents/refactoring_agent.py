@@ -67,6 +67,4 @@ class RefactoringAgent(WatsonxAgent):
             "Do not return Markdown or code fences.\n"
             "Do not add explanations or extra JSON keys.\n"
             "Escape newlines correctly inside the JSON string.\n"
-            "Begin your JSON response now:\n"
-            "{"
         )

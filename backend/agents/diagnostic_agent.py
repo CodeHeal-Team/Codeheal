@@ -47,5 +47,4 @@ class DiagnosticAgent(WatsonxAgent):
             '  "confidence": 0.9\n'
             "}\n"
         )
-        parts.append("\nBegin your JSON response now:\n{")
         return "".join(parts)

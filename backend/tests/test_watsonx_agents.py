@@ -443,10 +443,18 @@ class TestDiagnosticAgent:
             assert key in prompt, f"Expected key '{key}' in prompt"
 
     def test_prompt_starts_with_opening_brace(self):
-        """Last non-whitespace char hints at starting the JSON block."""
-        req = DiagnosisRequest(source_files=_SOURCE_FILES, test_output=_TEST_OUTPUT)
+        """Prompt includes the required diagnostic JSON structure."""
+        req = DiagnosisRequest(
+            source_files=_SOURCE_FILES,
+            test_output=_TEST_OUTPUT,
+        )
         prompt = DiagnosticAgent._build_prompt(req)
-        assert prompt.rstrip().endswith("{")
+
+        assert "Return exactly this JSON structure:" in prompt
+        assert '"root_cause":' in prompt
+        assert '"affected_file":' in prompt
+        assert '"affected_lines":' in prompt
+        assert '"confidence":' in prompt
 
     # -- run() with mocked model ------------------------------------------
 
@@ -583,9 +591,13 @@ class TestTestGeneratorAgent:
         assert '"code"' in prompt
 
     def test_prompt_starts_with_opening_brace(self):
+        """Prompt includes the required test-generation JSON structure."""
         req = self._make_request()
         prompt = TestGeneratorAgent._build_prompt(req)
-        assert prompt.rstrip().endswith("{")
+
+        assert "exactly these two fields:" in prompt
+        assert '"filename": "tests/test_generated.py"' in prompt
+        assert '"code": "complete pytest source code"' in prompt
 
     # -- run() with mocked model ------------------------------------------
 
@@ -700,9 +712,13 @@ class TestRefactoringAgent:
         assert "Return ONLY" in prompt
 
     def test_prompt_starts_with_opening_brace(self):
+        """Prompt includes the required patch JSON instructions."""
         req = self._make_request()
         prompt = RefactoringAgent._build_prompt(req)
-        assert prompt.rstrip().endswith("{")
+
+        assert "valid JSON object with one key: diff" in prompt
+        assert 'The value of "diff" must be a Git diff string.' in prompt
+        assert 'The diff must start with "diff --git".' in prompt
 
     # -- run() with mocked model ------------------------------------------
 
