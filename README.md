@@ -209,6 +209,11 @@ Built for the IBM watsonx Hackathon.
 
 ## IBM Bob 2.0 Development Evidence
 
-Screenshots documenting IBM Bob 2.0's assistance with the CodeHeal project will be collected in [`docs/bob-evidence/`](docs/bob-evidence/). The folder README describes the evidence screenshots to add, including task-session summaries, module validation, and integration-test results.
+The following screenshots document the CodeHeal development process and live application. The Bob task-session and validation screenshots provide development evidence; the live-application screenshot shows the deployed frontend.
 
-**Note:** The evidence folder guide is present; add the actual screenshots before submitting the project.
+1. [Backend pipeline task/session summary](docs/bob-evidence/01-backend-pipeline.png)
+2. [Response parser task summary](docs/bob-evidence/02-response-parser-summary.png)
+3. [Module validation and test results](docs/bob-evidence/03-validation-and-tests.png)
+4. [Live application frontend](docs/bob-evidence/04-live-application.png)
+
+See the [evidence folder guide](docs/bob-evidence/README.md) for context. Screenshots should be genuine, readable, and free of API keys, tokens, or other secrets.
