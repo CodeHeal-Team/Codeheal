@@ -30,6 +30,8 @@ Design notes
 from __future__ import annotations
 
 import asyncio
+import shutil
+import tempfile
 import dataclasses
 import json
 import queue
@@ -169,6 +171,7 @@ def _run_in_thread(ctx: _RunContext) -> None:
             _sse_event("failed", {"error": str(exc), "run_id": ctx.run_id})
         )
     finally:
+        shutil.rmtree(ctx.repo_path, ignore_errors=True)
         ctx.event_queue.put(_SENTINEL)
         ctx.finished.set()
 
@@ -210,7 +213,22 @@ def create_run(body: RunRequest) -> RunResponse:
             ),
         )
 
-    repo_path = str(_SAMPLES_DIR / scenario)
+    # Give every run an isolated copy of the selected sample.
+    sample_path = _SAMPLES_DIR / scenario
+    repo_path = tempfile.mkdtemp(prefix=f"codeheal-{scenario}-")
+
+    shutil.copytree(
+        sample_path,
+        repo_path,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            "__pycache__",
+            ".pytest_cache",
+            "pytest-cache-files-*",
+            ".git",
+        ),
+    )
+
     run_id = str(uuid.uuid4())
     ctx = _RunContext(run_id=run_id, repo_path=repo_path)
     _runs[run_id] = ctx
