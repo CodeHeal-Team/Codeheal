@@ -40,11 +40,21 @@ CodeHeal brings these steps together in an automated debugging pipeline. It uses
 6. **Verify:** Rerun the test to check whether the fix resolves the failure.
 7. **Report:** Display the pipeline results and code changes.
 
-## Demo Scenario
+## Demo Scenarios
 
-The `none_bug` scenario demonstrates a calculator function that does not validate `None` inputs before division.
+The live demo includes three seeded bug scenarios. Each starts with a failing test, uses IBM watsonx.ai to assist with diagnosis and repair, generates a reproducible regression test, applies a patch, and reruns tests to verify the result.
 
-The test expects a `ValueError` when a `None` input is supplied, but the original function raises a `TypeError`. CodeHeal diagnoses the missing validation, applies a repair, and verifies the result by rerunning the test.
+### 1. Missing `None` validation (`none_bug`)
+
+A calculator function attempts division without validating a `None` input. The initial test exposes the resulting `TypeError`; CodeHeal diagnoses the missing guard, applies a fix, and verifies the regression test.
+
+### 2. Broken API routing (`broken_api`)
+
+A route lookup fails because a key contains a visually similar Cyrillic character instead of the expected ASCII character. CodeHeal identifies the mismatched key, applies a repair, and verifies the route with a regression test.
+
+### 3. Off-by-one slice boundary (`off_by_one`)
+
+The `last_n(items, n)` utility calculates its slice start as `len(items) - n`. When `n` exceeds the list length, the negative start index returns an incorrect slice. CodeHeal diagnoses the missing clamp, changes the start to `max(0, len(items) - n)`, and verifies the fix with tests.
 
 ## Technology Stack
 
