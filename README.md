@@ -11,6 +11,10 @@ CodeHeal is an AI-powered debugging and code repair platform built for the IBM w
 
 > Note: The backend runs on Render's free tier and may take some time to wake up after a period of inactivity.
 
+## Project Presentation
+
+* **Slide Deck (PDF):** https://drive.google.com/file/d/1BpMmxQRBn_Wvl6MbzgtzzGVRXNzgfIEI/view?usp=sharing
+
 ## The Problem
 
 Debugging software can be time-consuming. Developers often need to reproduce a failure, inspect logs, identify the faulty code, write a test, implement a fix, and rerun the test suite manually.
