@@ -99,7 +99,7 @@ router.delete('/orders/:id', deleteOrderHandler);`,
   {
     id: 'off-by-one',
     label: 'Off-by-One Math Error',
-    file: 'src/utils/pagination.js',
+    file: 'src/list_utils.py',
     testFile: 'src/utils/pagination.bug_reproduce.test.js',
     description: 'Last item on each page is dropped from paginated results.',
     tag: 'Logic',
