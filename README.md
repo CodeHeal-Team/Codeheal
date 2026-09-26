@@ -7,6 +7,7 @@ CodeHeal is an AI-powered debugging and code repair platform built for the IBM w
 * **Frontend:** https://codeheal-frontend.vercel.app
 * **Backend API:** https://codeheal-backend.onrender.com
 * **API Documentation:** https://codeheal-backend.onrender.com/docs
+* **Demo Video:** https://drive.google.com/file/d/195o--mRDHAvW467eQBq6rCZftiRjLi1W/view?usp=sharing
 
 > Note: The backend runs on Render's free tier and may take some time to wake up after a period of inactivity.
 
@@ -130,7 +131,7 @@ From the repository root, run these commands in PowerShell:
 ```powershell
 cd backend
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\\.venv\\Scripts\\Activate.ps1
 pip install -r requirements.txt
 ```
 
