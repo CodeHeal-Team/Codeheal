@@ -32,6 +32,33 @@ class RefactoringAgent(WatsonxAgent):
 
         return result.strip()
 
+    def run_full_file(
+        self,
+        request: RefactorRequest,
+        retry_instructions: str = "",
+    ) -> str:
+        """Ask the model for the complete corrected file when a diff won't apply."""
+        diagnosis = request.diagnosis
+        affected_content = request.source_files.get(diagnosis.affected_file, "")
+        prompt = (
+            "You are repairing a Python file after a generated Git diff failed to apply.\n"
+            "Return the COMPLETE corrected contents of the affected file, not a diff.\n"
+            "Use the exact source shown below as your starting point. Preserve unrelated code.\n"
+            "Fix only the diagnosed bug and ensure the failing test passes.\n\n"
+            f"FILE PATH: {diagnosis.affected_file}\n"
+            f"ROOT CAUSE: {diagnosis.root_cause}\n"
+            f"EXPLANATION: {diagnosis.explanation}\n"
+            f"FAILING TEST:\n{request.generated_test.code}\n\n"
+            f"CURRENT FILE CONTENT:\n{affected_content}\n\n"
+            f"RETRY INSTRUCTIONS: {retry_instructions}\n\n"
+            'Return only one JSON object with exactly one key, "content", whose value is the complete file text. '
+            "Do not use Markdown fences or add any text outside the JSON."
+        )
+        result = self.generate(prompt)
+        if not result or not result.strip():
+            raise RuntimeError("Refactoring agent returned an empty full-file response.")
+        return result.strip()
+
     @staticmethod
     def _build_prompt(
         request: RefactorRequest,
