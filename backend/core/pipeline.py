@@ -412,20 +412,37 @@ def run_pipeline(
                                 "Return a corrected complete file."
                             ),
                         )
-                        try:
-                            json_start = full_response.find("{")
-                            if json_start < 0:
-                                raise ValueError("No JSON object in full-file response.")
-                            full_data, _ = json.JSONDecoder().raw_decode(
-                                full_response[json_start:]
-                            )
-                            corrected_content = full_data.get("content")
-                            if not isinstance(corrected_content, str) or not corrected_content.strip():
-                                raise ValueError("JSON field 'content' must be non-empty text.")
-                        except (json.JSONDecodeError, ValueError, AttributeError) as parse_exc:
+                        # Models sometimes return the requested file as plain text
+                        # instead of the requested JSON wrapper. Accept both formats.
+                        corrected_content = ""
+                        json_start = full_response.find("{")
+                        if json_start >= 0:
+                            try:
+                                full_data, _ = json.JSONDecoder().raw_decode(
+                                    full_response[json_start:]
+                                )
+                                if isinstance(full_data, dict):
+                                    candidate = full_data.get("content")
+                                    if isinstance(candidate, str) and candidate.strip():
+                                        corrected_content = candidate
+                            except json.JSONDecodeError:
+                                pass
+
+                        if not corrected_content:
+                            corrected_content = full_response.strip()
+                            # Tolerate a Markdown code fence around the complete file.
+                            if corrected_content.startswith("```"):
+                                lines = corrected_content.splitlines()
+                                if lines and lines[0].startswith("```"):
+                                    lines = lines[1:]
+                                if lines and lines[-1].strip() == "```":
+                                    lines = lines[:-1]
+                                corrected_content = "\n".join(lines).strip("\n")
+
+                        if not corrected_content.strip():
                             raise RuntimeError(
-                                f"Full-file fallback response was invalid: {parse_exc}"
-                            ) from parse_exc
+                                "Full-file fallback response was empty after parsing."
+                            )
 
                         if target_file.suffix == ".py":
                             try:
