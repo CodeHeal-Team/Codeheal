@@ -436,8 +436,8 @@ def run_pipeline(
                                 ) from syntax_exc
 
                         original_content = target_file.read_text(encoding="utf-8")
-                        if not corrected_content.endswith("\\n"):
-                            corrected_content += "\\n"
+                        if not corrected_content.endswith("\n"):
+                            corrected_content += "\n"
                         generated_lines = list(difflib.unified_diff(
                             original_content.splitlines(keepends=True),
                             corrected_content.splitlines(keepends=True),
@@ -450,7 +450,7 @@ def run_pipeline(
                             )
                         diff = (
                             f"diff --git a/{state.diagnosis.affected_file} "
-                            f"b/{state.diagnosis.affected_file}\\n"
+                            f"b/{state.diagnosis.affected_file}\n"
                             + "".join(generated_lines)
                         )
                         patch_file.write_text(diff, encoding="utf-8")
