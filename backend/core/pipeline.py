@@ -445,12 +445,50 @@ def run_pipeline(
                             )
 
                         if target_file.suffix == ".py":
-                            try:
-                                ast.parse(corrected_content)
-                            except SyntaxError as syntax_exc:
+                            # Granite may prepend an explanation or wrap the file
+                            # in Markdown even when asked for file contents only.
+                            # Try fenced code blocks first, then the full response,
+                            # then suffixes beginning at each line. Accept only a
+                            # candidate that parses as a complete Python module.
+                            response_lines = corrected_content.splitlines()
+                            candidates = []
+                            in_fence = False
+                            fence_lines = []
+                            for line in response_lines:
+                                if line.strip().startswith("```"):
+                                    if in_fence:
+                                        candidates.append("\\n".join(fence_lines))
+                                        fence_lines = []
+                                        in_fence = False
+                                    else:
+                                        in_fence = True
+                                    continue
+                                if in_fence:
+                                    fence_lines.append(line)
+                            candidates.append(corrected_content)
+                            candidates.extend(
+                                "\\n".join(response_lines[offset:])
+                                for offset in range(1, len(response_lines))
+                            )
+
+                            valid_content = None
+                            last_syntax_error = None
+                            for candidate in candidates:
+                                if not candidate.strip():
+                                    continue
+                                try:
+                                    ast.parse(candidate)
+                                    valid_content = candidate
+                                    break
+                                except SyntaxError as syntax_exc:
+                                    last_syntax_error = syntax_exc
+
+                            if valid_content is None:
                                 raise RuntimeError(
-                                    f"Full-file fallback introduced a syntax error: {syntax_exc}"
-                                ) from syntax_exc
+                                    "Full-file fallback response contained no valid "
+                                    f"Python module: {last_syntax_error}"
+                                )
+                            corrected_content = valid_content
 
                         original_content = target_file.read_text(encoding="utf-8")
                         if not corrected_content.endswith("\n"):
