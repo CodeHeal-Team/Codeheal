@@ -290,9 +290,6 @@ def run_pipeline(
         return _fail(
             state, callback, "Generate Test", f"Stage GENERATING_TEST failed: {exc}"
         )
-
-    
-    
     # ------------------------------------------------------------------
     # Stage 5 — APPLYING_FIX
     # ------------------------------------------------------------------
@@ -307,68 +304,113 @@ def run_pipeline(
             generated_test=state.generated_test,
         )
 
-        # Granite returns a JSON object containing the Git diff.
-        raw_diff = refactor_agent.run(refactor_request).strip()
+        repo_root = Path(state.repo_path)
+        patch_file = repo_root / ".codeheal.patch"
+        target_file = repo_root / state.diagnosis.affected_file
+
         def retry_refactor(error: str) -> str:
             retry_instructions = (
-                "Your previous response could not be parsed or applied.\n"
-                f"Parser/application error: {error}\n"
-                "Return a corrected, non-empty Git diff in the required JSON "
-                "object. The diff must begin with 'diff --git' and modify "
-                f"'{state.diagnosis.affected_file}'. "
-                "Do not return an empty diff, Markdown, or code fences."
+                "Your previous response was invalid.\n"
+                f"Exact error: {error}\n"
+                "Return a corrected, non-empty Git diff inside the required "
+                "JSON object with one key: diff. The diff must start with "
+                "'diff --git', contain valid unified diff hunk headers and "
+                "line counts, and modify the exact affected file shown in "
+                "the prompt. Do not return Markdown or code fences."
             )
             return refactor_agent.run(
                 refactor_request,
                 retry_instructions=retry_instructions,
             ).strip()
 
-        state.patch = parse_patch(
-            raw_diff,
-            retry_fn=retry_refactor,
-             repo_path=repo_path,
-        )
-        diff = state.patch.diff
-
-        if not diff or not diff.strip():
-            raise ValueError("Refactoring agent returned an empty diff")
-
-        repo_root = Path(state.repo_path)
-        patch_file = repo_root / ".codeheal.patch"
-        target_file = repo_root / state.diagnosis.affected_file
+        raw_diff = refactor_agent.run(refactor_request).strip()
+        patch_applied = False
 
         try:
-            patch_file.write_text(diff, encoding="utf-8")
-
-            check_result = subprocess.run(
-                ["git", "apply", "--check", str(patch_file)],
-                cwd=str(repo_root),
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-
-            if check_result.returncode != 0:
-                raise RuntimeError(
-                    "git apply failed (pre-check): "
-                    f"{check_result.stderr.strip() or check_result.stdout.strip()}"
+            # Allow at most two patch attempts.
+            for attempt in range(2):
+                # Parse the model response. If parsing fails, parse_patch
+                # invokes retry_refactor with the actual parsing error.
+                state.patch = parse_patch(
+                    raw_diff,
+                    retry_fn=retry_refactor,
+                    repo_path=str(repo_root),
                 )
 
-            apply_result = subprocess.run(
-                ["git", "apply", str(patch_file)],
-                cwd=str(repo_root),
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+                diff = state.patch.diff
+                if not diff or not diff.strip():
+                    raise ValueError(
+                        "Refactoring agent returned an empty diff"
+                    )
 
-            if apply_result.returncode != 0:
-                raise RuntimeError(
-                    "git apply failed: "
-                    f"{apply_result.stderr.strip() or apply_result.stdout.strip()}"
+                patch_file.write_text(diff, encoding="utf-8")
+
+                # Check the patch before modifying any source file.
+                check_result = subprocess.run(
+                    ["git", "apply", "--check", str(patch_file)],
+                    cwd=str(repo_root),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
                 )
 
-            # Validate syntax after applying the patch.
+                if check_result.returncode != 0:
+                    git_error = (
+                        check_result.stderr.strip()
+                        or check_result.stdout.strip()
+                        or "Unknown git apply --check error"
+                    )
+
+                    if attempt == 1:
+                        raise RuntimeError(
+                            "git apply failed (pre-check) after retry: "
+                            f"{git_error}"
+                        )
+
+                    # Ask the model to correct the actual Git error.
+                    raw_diff = refactor_agent.run(
+                        refactor_request,
+                        retry_instructions=(
+                            "Git rejected your previous patch.\n"
+                            f"Exact Git error: {git_error}\n"
+                            "Generate a complete corrected Git diff. Check "
+                            "the file paths, unified diff hunk headers, and "
+                            "added/removed line counts against the current "
+                            "file content. Return only the required JSON "
+                            "object with a non-empty diff string."
+                        ),
+                    ).strip()
+
+                    continue
+
+                # Apply only after the pre-check succeeds.
+                apply_result = subprocess.run(
+                    ["git", "apply", str(patch_file)],
+                    cwd=str(repo_root),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+
+                if apply_result.returncode != 0:
+                    apply_error = (
+                        apply_result.stderr.strip()
+                        or apply_result.stdout.strip()
+                        or "Unknown git apply error"
+                    )
+                    raise RuntimeError(
+                        f"git apply failed: {apply_error}"
+                    )
+
+                patch_applied = True
+                break
+
+            if not patch_applied:
+                raise RuntimeError(
+                    "Could not produce an applicable patch after retry"
+                )
+
+            # Validate the resulting Python file.
             if target_file.suffix == ".py":
                 ast.parse(target_file.read_text(encoding="utf-8"))
 
