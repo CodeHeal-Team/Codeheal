@@ -47,6 +47,7 @@ from core.models import (
     PipelineStage,
     PipelineState,
     RefactorRequest,
+    PatchResult,
     TestGenRequest,
     TimelineEvent,
 )
@@ -401,11 +402,85 @@ def run_pipeline(
                     )
 
                     if attempt == 1:
-                        # Second attempt also rejected — surface the git error.
-                        raise RuntimeError(
-                            "git apply failed (pre-check) after retry: "
-                            f"{git_error}"
+                        # A second diff can still target the wrong context/line offsets.
+                        # Fall back to complete file content, then build a fresh diff
+                        # against the exact on-disk file so Git receives matching context.
+                        full_response = refactor_agent.run_full_file(
+                            refactor_request,
+                            retry_instructions=(
+                                f"The previous diff was rejected: {git_error}. "
+                                "Return a corrected complete file."
+                            ),
                         )
+                        try:
+                            json_start = full_response.find("{")
+                            if json_start < 0:
+                                raise ValueError("No JSON object in full-file response.")
+                            full_data, _ = json.JSONDecoder().raw_decode(
+                                full_response[json_start:]
+                            )
+                            corrected_content = full_data.get("content")
+                            if not isinstance(corrected_content, str) or not corrected_content.strip():
+                                raise ValueError("JSON field 'content' must be non-empty text.")
+                        except (json.JSONDecodeError, ValueError, AttributeError) as parse_exc:
+                            raise RuntimeError(
+                                f"Full-file fallback response was invalid: {parse_exc}"
+                            ) from parse_exc
+
+                        if target_file.suffix == ".py":
+                            try:
+                                ast.parse(corrected_content)
+                            except SyntaxError as syntax_exc:
+                                raise RuntimeError(
+                                    f"Full-file fallback introduced a syntax error: {syntax_exc}"
+                                ) from syntax_exc
+
+                        original_content = target_file.read_text(encoding="utf-8")
+                        if not corrected_content.endswith("\\n"):
+                            corrected_content += "\\n"
+                        generated_lines = list(difflib.unified_diff(
+                            original_content.splitlines(keepends=True),
+                            corrected_content.splitlines(keepends=True),
+                            fromfile=f"a/{state.diagnosis.affected_file}",
+                            tofile=f"b/{state.diagnosis.affected_file}",
+                        ))
+                        if not generated_lines:
+                            raise RuntimeError(
+                                "Full-file fallback produced no changes to the affected file."
+                            )
+                        diff = (
+                            f"diff --git a/{state.diagnosis.affected_file} "
+                            f"b/{state.diagnosis.affected_file}\\n"
+                            + "".join(generated_lines)
+                        )
+                        patch_file.write_text(diff, encoding="utf-8")
+                        fallback_check = subprocess.run(
+                            ["git", "apply", "--check", "--recount", str(patch_file)],
+                            cwd=str(repo_root),
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                        )
+                        if fallback_check.returncode != 0:
+                            raise RuntimeError(
+                                "Full-file fallback diff failed Git pre-check: "
+                                + (fallback_check.stderr.strip() or fallback_check.stdout.strip())
+                            )
+                        fallback_apply = subprocess.run(
+                            ["git", "apply", "--recount", str(patch_file)],
+                            cwd=str(repo_root),
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                        )
+                        if fallback_apply.returncode != 0:
+                            raise RuntimeError(
+                                "Full-file fallback diff failed to apply: "
+                                + (fallback_apply.stderr.strip() or fallback_apply.stdout.strip())
+                            )
+                        state.patch = PatchResult(diff=diff, validated=True)
+                        patch_applied = True
+                        break
 
                     # Ask the model to correct the patch using the exact git error.
                     raw_diff = refactor_agent.run(
