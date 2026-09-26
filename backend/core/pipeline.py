@@ -386,7 +386,7 @@ def run_pipeline(
 
                 # Pre-check: never apply a patch that git would reject.
                 check_result = subprocess.run(
-                    ["git", "apply", "--check", str(patch_file)],
+                    ["git", "apply", "--check", "--recount", str(patch_file)],
                     cwd=str(repo_root),
                     capture_output=True,
                     text=True,
@@ -416,7 +416,7 @@ def run_pipeline(
 
                 # Pre-check passed — apply the patch.
                 apply_result = subprocess.run(
-                    ["git", "apply", str(patch_file)],
+                    ["git", "apply", "--recount", str(patch_file)],
                     cwd=str(repo_root),
                     capture_output=True,
                     text=True,
