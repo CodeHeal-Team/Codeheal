@@ -220,7 +220,14 @@ def run_pipeline(
             test_output=test_output,
         )
         raw_diag = diag_agent.run(diag_request)
-        retry_diag = lambda err: diag_agent.run(diag_request)  # noqa: E731
+        retry_diag = lambda err: diag_agent.run(  # noqa: E731
+            diag_request,
+            retry_instructions=(
+                f"Your previous response could not be parsed: {err}. "
+                "Return only the exact JSON object requested above. "
+                "Do not include prose, Markdown, or code fences."
+            ),
+        )
         state.diagnosis = parse_diagnosis(raw_diag, retry_fn=retry_diag)
         _emit(state, "Diagnose", "done")
         callback(state)
