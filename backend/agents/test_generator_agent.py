@@ -42,7 +42,7 @@ class TestGeneratorAgent(WatsonxAgent):
             "4. The generated test must initially FAIL against the buggy code.\n"
             "5. Do not modify production code.\n\n"
             "OUTPUT FORMAT:\n"
-            "Your response MUST contain exactly one JSON object.\n"
+            "Return ONLY one JSON object, with no text before or after it.\n"
             "Do not output Markdown.\n"
             "Do not output ``` fences.\n"
             "Do not output explanations.\n"
@@ -59,4 +59,6 @@ class TestGeneratorAgent(WatsonxAgent):
             '{"filename":"tests/test_generated.py",'
             '"code":"from src.calculator import divide\\n\\n'
             'def test_example():\\n    ..."}'
+            "\n\nBegin your JSON response now:\n"
+            "{"
         )

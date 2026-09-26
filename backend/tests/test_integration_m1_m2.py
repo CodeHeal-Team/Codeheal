@@ -29,6 +29,7 @@ Coverage goals
 from __future__ import annotations
 
 import json
+import shutil
 import os
 import sys
 from contextlib import contextmanager
@@ -65,6 +66,36 @@ from core.response_parser import ParseError, parse_diagnosis, parse_generated_te
 # ---------------------------------------------------------------------------
 
 SAMPLES_DIR = Path(__file__).resolve().parent.parent / "samples"
+
+@pytest.fixture(autouse=True)
+def isolate_sample_repositories(tmp_path, monkeypatch):
+    """Run integration tests against temporary copies of sample repos."""
+    original_samples = SAMPLES_DIR
+    isolated_samples = tmp_path / "samples"
+
+    shutil.copytree(original_samples, isolated_samples)
+
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "SAMPLES_DIR",
+        isolated_samples,
+    )
+
+    # Class-level paths are evaluated when this module is imported,
+    # so redirect those paths to the temporary copies too.
+    for test_class in list(globals().values()):
+        if not isinstance(test_class, type):
+            continue
+
+        scenario = test_class.__dict__.get("_SCENARIO")
+        if scenario:
+            scenario_name = Path(scenario).name
+            monkeypatch.setattr(
+                test_class,
+                "_SCENARIO",
+                str(isolated_samples / scenario_name),
+                raising=False,
+            )
 
 # Raw JSON the mocked model returns — mirrors the none_bug scenario.
 _DIAG_JSON_NONE_BUG = json.dumps({

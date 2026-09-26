@@ -29,36 +29,44 @@ class RefactoringAgent(WatsonxAgent):
 
         return result.strip()
 
+    
     @staticmethod
     def _build_prompt(request: RefactorRequest) -> str:
         diagnosis = request.diagnosis
         affected_content = request.source_files.get(
             diagnosis.affected_file, ""
         )
+        affected_lines = ", ".join(
+            str(line) for line in diagnosis.affected_lines
+        )
 
         return (
             "You are a Python software engineer fixing one specific bug.\n\n"
-            "BUG:\n"
+            "ROOT CAUSE:\n"
+            f"{diagnosis.root_cause}\n\n"
+            "BUG EXPLANATION:\n"
             f"{diagnosis.explanation}\n\n"
             "AFFECTED FILE:\n"
             f"{diagnosis.affected_file}\n\n"
+            "AFFECTED LINES:\n"
+            f"{affected_lines or 'Not specified'}\n\n"
             "CURRENT FILE CONTENT:\n"
             f"{affected_content}\n\n"
             "FAILING TEST:\n"
             f"{request.generated_test.code}\n\n"
             "TASK:\n"
             "Fix the bug with the smallest possible change.\n"
-            "The fix must make the failing test pass.\n"
-            "Do not change unrelated behavior.\n\n"
+            "Preserve unrelated behavior and existing code.\n"
+            "The fix must make the failing test pass.\n\n"
             "OUTPUT RULES:\n"
-            "Return ONLY the complete corrected Python source file.\n"
-            "Do NOT return JSON.\n"
-            "Do NOT return Markdown.\n"
-            "Do NOT use ``` code fences.\n"
-            "Do NOT add explanations.\n"
-            "Do NOT describe the file.\n"
-            "Do NOT add text before or after the Python source.\n"
-            "The first character of your response must be the first "
-            "character of the Python file.\n"
-            "The last character must be the last character of the Python file.\n"
+            "Return ONLY a valid JSON object with one key: diff.\n"
+            'The value of "diff" must be a Git diff string.\n'
+            'The diff must start with "diff --git".\n'
+            "Include the correct file paths and unified diff hunks.\n"
+            "Use the exact affected file path given above.\n"
+            "Do not return Markdown or code fences.\n"
+            "Do not add explanations or extra JSON keys.\n"
+            "Escape newlines correctly inside the JSON string.\n"
+            "Begin your JSON response now:\n"
+            "{"
         )

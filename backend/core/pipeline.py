@@ -31,6 +31,7 @@ changes are needed.
 from __future__ import annotations
 
 import subprocess
+import ast
 import sys
 import tempfile
 import traceback
@@ -245,17 +246,27 @@ def run_pipeline(
             raw_test,
             retry_fn=retry_test,
             )
+        
         except Exception:
-    # Granite did not return the expected JSON.
-    # Fall back to the existing failing pytest file.
-            failing_test = state.source_files.get("tests/test_calculator.py")
+            # Granite did not return the expected JSON.
+            # Fall back to an existing test file for any scenario.
+            test_files = sorted(
+                path
+                for path in state.source_files
+                if path.startswith("tests/")
+                and path.endswith(".py")
+                and not path.endswith("__init__.py")
+                and not path.endswith("test_generated.py")
+            )
 
-            if not failing_test:
+            if not test_files:
                 raise
+
+            failing_test = test_files[0]
 
             state.generated_test = GeneratedTest(
                 filename="tests/test_generated.py",
-                code=failing_test,
+                code=state.source_files[failing_test],
             )
         
         # Write the generated test to a temp file and confirm it fails.
@@ -280,7 +291,9 @@ def run_pipeline(
             state, callback, "Generate Test", f"Stage GENERATING_TEST failed: {exc}"
         )
 
-        # ------------------------------------------------------------------
+    
+    
+    # ------------------------------------------------------------------
     # Stage 5 — APPLYING_FIX
     # ------------------------------------------------------------------
     _transition(state, PipelineStage.APPLYING_FIX, callback, "Fix", "in_progress")
@@ -294,89 +307,65 @@ def run_pipeline(
             generated_test=state.generated_test,
         )
 
-        # The refactoring agent returns the complete fixed file.
-        raw_fixed_file = refactor_agent.run(refactor_request)
-        print("\n--- REFACTOR AGENT RAW RESPONSE ---")
-        print(repr(raw_fixed_file))
-        print("--- END REFACTOR AGENT RAW RESPONSE ---\n")
+        # Granite returns a JSON object containing the Git diff.
+        raw_diff = refactor_agent.run(refactor_request).strip()
 
-        print("\n--- REFACTOR AGENT RAW RESPONSE ---")
-        print(raw_fixed_file)
-        print("--- END REFACTOR AGENT RAW RESPONSE ---\n")
-
-        fixed_file = raw_fixed_file.strip()
-        # Remove accidental prose before the Python source.
-        if "def add(" in fixed_file:
-            fixed_file = fixed_file[fixed_file.index("def add("):]
-
-        # Remove Markdown fences if the model added them.
-        if fixed_file.startswith("```"):
-            lines = fixed_file.splitlines()
-
-            if lines and lines[0].strip().startswith("```"):
-                lines = lines[1:]
-
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-
-            fixed_file = "\n".join(lines).strip()
-
-        if not fixed_file:
-            raise ValueError(
-                "Refactoring agent returned an empty fixed file."
-            )
-
-        affected_file = state.diagnosis.affected_file
-        repo_root = Path(repo_path).resolve()
-        target_file = repo_root / affected_file
-
-        if not target_file.exists():
-            raise FileNotFoundError(
-                f"Affected file does not exist: {target_file}"
-            )
-
-        # Read the exact file currently on disk.
-        old_text = target_file.read_text(encoding="utf-8")
-
-        # Save the generated patch information for the pipeline state.
-        diff_lines = list(
-            difflib.unified_diff(
-                old_text.splitlines(keepends=True),
-                fixed_file.splitlines(keepends=True),
-                fromfile=f"a/{affected_file}",
-                tofile=f"b/{affected_file}",
-                lineterm="\n",
-            )
-        )
-
-        diff = (
-            f"diff --git a/{affected_file} b/{affected_file}\n"
-            + "".join(diff_lines)
-        )
+        def retry_refactor(error: str) -> str:
+            return refactor_agent.run(refactor_request).strip()
 
         state.patch = parse_patch(
-            json.dumps({"diff": diff}),
-            repo_path=repo_path,
+            raw_diff,
+            retry_fn=retry_refactor,
+             repo_path=repo_path,
         )
+        diff = state.patch.diff
 
-                # Validate the model output BEFORE modifying the repository.
-        import ast
+        if not diff or not diff.strip():
+            raise ValueError("Refactoring agent returned an empty diff")
+
+        repo_root = Path(state.repo_path)
+        patch_file = repo_root / ".codeheal.patch"
+        target_file = repo_root / state.diagnosis.affected_file
 
         try:
-            ast.parse(fixed_file)
-        except SyntaxError as exc:
-            raise ValueError(
-                "Refactoring agent returned invalid Python: "
-                f"{exc}"
-            ) from exc
+            patch_file.write_text(diff, encoding="utf-8")
 
-        # Only write the file after syntax validation succeeds.
-        target_file.write_text(
-            fixed_file + "\n",
-            encoding="utf-8",
-        )
+            check_result = subprocess.run(
+                ["git", "apply", "--check", str(patch_file)],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
 
-        print(f"Fixed file written: {affected_file}")
+            if check_result.returncode != 0:
+                raise RuntimeError(
+                    "git apply failed (pre-check): "
+                    f"{check_result.stderr.strip() or check_result.stdout.strip()}"
+                )
+
+            apply_result = subprocess.run(
+                ["git", "apply", str(patch_file)],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if apply_result.returncode != 0:
+                raise RuntimeError(
+                    "git apply failed: "
+                    f"{apply_result.stderr.strip() or apply_result.stdout.strip()}"
+                )
+
+            # Validate syntax after applying the patch.
+            if target_file.suffix == ".py":
+                ast.parse(target_file.read_text(encoding="utf-8"))
+
+        finally:
+            patch_file.unlink(missing_ok=True)
+
+        print(f"Fixed file applied: {state.diagnosis.affected_file}")
 
         _emit(state, "Fix", "done")
         callback(state)

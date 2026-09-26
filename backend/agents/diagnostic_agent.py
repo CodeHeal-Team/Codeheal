@@ -36,7 +36,7 @@ class DiagnosticAgent(WatsonxAgent):
 
         parts.append(
             "\n\nIMPORTANT: Your entire response must be valid JSON. "
-            "Do not write any explanation before or after the JSON. "
+            "Return ONLY the JSON object, with no prose before or after it. "
             "Do not use Markdown code fences.\n"
             "Return exactly this JSON structure:\n"
             "{\n"
@@ -47,5 +47,5 @@ class DiagnosticAgent(WatsonxAgent):
             '  "confidence": 0.9\n'
             "}\n"
         )
-
+        parts.append("\nBegin your JSON response now:\n{")
         return "".join(parts)

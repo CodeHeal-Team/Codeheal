@@ -1,68 +1,198 @@
-# IBM Hackathon GitHub Project Template
+# CodeHeal — AI-Powered Automated Bug Diagnosis & Repair
 
-This GitHub project template is for IBM Hackathon projects. It includes pre-configured security files to help prevent accidental credential commits and potential account suspension during the hackathon.
+CodeHeal is an AI-powered debugging and code repair platform built for the IBM watsonx Hackathon. It helps developers identify bugs, understand their root causes, generate reproducible tests, apply code fixes, and verify those fixes through automated testing.
 
-## 🚀 Quick Start
+## Live Demo
 
-1. **Use this template to create your project:**
-   - Click "Use this template" button above and select "Create a new repository"
-   - Name your repository
-   - Click "Create repository"
+* **Frontend:** https://codeheal-frontend.vercel.app
+* **Backend API:** https://codeheal-backend.onrender.com
+* **API Documentation:** https://codeheal-backend.onrender.com/docs
 
-2. **Clone your new repository:**
+> Note: The backend runs on Render's free tier and may take some time to wake up after a period of inactivity.
 
-   ```bash
-   git clone https://github.com/HACKATHON-ORG/your-repo-name.git
-   cd your-repo-name
-   ```
+## The Problem
 
-3. **Set up environment variables:**
+Debugging software can be time-consuming. Developers often need to reproduce a failure, inspect logs, identify the faulty code, write a test, implement a fix, and rerun the test suite manually.
 
-   ```bash
-   # Copy the example file
-   cp .env.example .env
+## Our Solution
 
-   # Edit .env with your actual credentials
-   # Use your preferred editor (nano, vim, code, etc.)
-   nano .env
-   ```
+CodeHeal brings these steps together in an automated debugging pipeline. It uses IBM watsonx.ai to assist with root-cause diagnosis and code repair, while automated tests help verify the result.
 
-4. **Verify .gitignore is working:**
+## Key Features
 
-   ```bash
-   # This should NOT show .env file
-   git status
+* Repository and sample-project loading
+* Automated execution of the initial test suite
+* AI-assisted root-cause diagnosis
+* Identification of the affected source file
+* Generation of a reproducible test
+* Automated patch generation and application
+* Patch validation
+* Test execution after the repair
+* Pipeline progress and results displayed in the frontend
 
-   # This should confirm .env is ignored
-   git check-ignore -v .env
-   ```
+## How It Works
 
-5. **Start developing!**
+1. **Load:** Load the selected sample project.
+2. **Test:** Run the initial test suite to identify a failure.
+3. **Diagnose:** Analyze the failure and identify the likely root cause.
+4. **Generate a test:** Create a reproducible test for the bug.
+5. **Repair:** Generate, validate, and apply a code patch.
+6. **Verify:** Rerun the test to check whether the fix resolves the failure.
+7. **Report:** Display the pipeline results and code changes.
 
-## 🔒 Security Features
+## Demo Scenario
 
-This template includes:
+The `none_bug` scenario demonstrates a calculator function that does not validate `None` inputs before division.
 
-- **`.gitignore`** - Prevents committing credentials and live session files
-- **`.bobignore`** - Prevents AI assistants from logging credentials
-- **`.env.example`** - Template for your environment variables
+The test expects a `ValueError` when a `None` input is supplied, but the original function raises a `TypeError`. CodeHeal diagnoses the missing validation, applies a repair, and verifies the result by rerunning the test.
 
-## 📋 Before Every Commit
+## Technology Stack
 
-Always run this checklist:
+| Component         | Technology                        |
+| ----------------- | --------------------------------- |
+| Frontend          | React, Vite, JavaScript           |
+| Backend API       | Python, FastAPI                   |
+| AI                | IBM watsonx.ai, IBM Granite model |
+| Automated testing | pytest                            |
+| Frontend hosting  | Vercel                            |
+| Backend hosting   | Render                            |
 
-- [ ] Reviewed `git diff` for sensitive data
-- [ ] No hardcoded API keys or passwords
-- [ ] `.env` file is NOT in staged changes
-- [ ] No files with "credential" or "secret" in name
-- [ ] Used environment variables for all credentials
+## Architecture
 
-## 🆘 Need Help?
+```text
+User
+ |
+ v
+React + Vite Frontend (Vercel)
+ |
+ v
+FastAPI Backend (Render)
+ |
+ +--> Sample repository and test execution
+ |
+ +--> IBM watsonx.ai for AI-assisted diagnosis and repair
+ |
+ +--> Patch validation and post-fix testing
+ |
+ v
+Pipeline results displayed in the frontend
+```
 
-- Read [SECURITY.md](SECURITY.MD) for detailed guidelines
-- Contact hackathon support through mentor channel
-- Ask in the hackathon Slack workspace
+## Repository Structure
+
+```text
+Codeheal/
+├── backend/
+│   ├── api/
+│   ├── core/
+│   ├── samples/
+│   ├── tests/
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── .env.example
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+## Run Locally
+
+### Prerequisites
+
+* Python installed
+* Node.js and npm installed
+* IBM watsonx.ai credentials for running AI-powered backend operations
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/CodeHeal-Team/Codeheal.git
+cd Codeheal
+```
+
+### 2. Configure the backend
+
+From the repository root, run these commands in PowerShell:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Create a `backend/.env` file using `backend/.env.example` as a template. Fill in your own IBM watsonx.ai credentials:
+
+```dotenv
+WATSONX_API_KEY=your_watsonx_api_key
+WATSONX_PROJECT_ID=your_watsonx_project_id
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+```
+
+Never commit this file or share your API key.
+
+Start the backend from the `backend` directory:
+
+```bash
+uvicorn api.app:app --reload --port 8000
+```
+
+The API will be available at `http://localhost:8000`. Interactive API documentation is available at `http://localhost:8000/docs`.
+
+### 3. Configure the frontend
+
+Open a second terminal from the repository root:
+
+```bash
+cd frontend
+npm install
+```
+
+Create a `frontend/.env` file containing:
+
+```dotenv
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Start the frontend:
+
+```bash
+npm run dev
+```
+
+Open the local URL printed by Vite, normally `http://localhost:5173`.
+
+## Environment Variables
+
+| Variable             | Purpose                                  |
+| -------------------- | ---------------------------------------- |
+| `WATSONX_API_KEY`    | Authenticates requests to IBM watsonx.ai |
+| `WATSONX_PROJECT_ID` | Identifies the watsonx project           |
+| `WATSONX_URL`        | IBM watsonx.ai service endpoint          |
+| `VITE_API_BASE_URL`  | Backend API URL used by the frontend     |
+
+Use the relevant `.env.example` files as templates. Never put real credentials in source code, commit them to Git, or include them in public project archives.
+
+## Security
+
+* API keys and credentials must be supplied through environment variables.
+* Real `.env` files must remain untracked and private.
+* Only placeholder values should appear in `.env.example` files.
+* Review changes before committing or pushing to GitHub.
+
+## Team
+
+**Project:** CodeHeal
+**Organization:** CodeHeal-Team
+**Repository:** https://github.com/CodeHeal-Team/Codeheal
+
+## Future Scope
+
+Potential improvements include supporting more programming languages, integrating additional test frameworks, improving patch evaluation, and adding richer debugging reports and repository integrations.
 
 ---
 
-**Remember:** Security is everyone's responsibility. When in doubt, ask for help!
+Built for the IBM watsonx Hackathon.
