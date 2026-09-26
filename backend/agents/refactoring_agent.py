@@ -12,9 +12,12 @@ class RefactoringAgent(WatsonxAgent):
     """
     Produces the old and new file contents for a targeted fix.
     """
-
-    def run(self, request: RefactorRequest) -> str:
-        prompt = self._build_prompt(request)
+    def run(
+        self,
+        request: RefactorRequest,
+        retry_instructions: str = "",
+    ) -> str:
+        prompt = self._build_prompt(request, retry_instructions)
 
         result = self.generate(prompt)
 
@@ -29,9 +32,11 @@ class RefactoringAgent(WatsonxAgent):
 
         return result.strip()
 
-    
     @staticmethod
-    def _build_prompt(request: RefactorRequest) -> str:
+    def _build_prompt(
+        request: RefactorRequest,
+        retry_instructions: str = "",
+    ) -> str:
         diagnosis = request.diagnosis
         affected_content = request.source_files.get(
             diagnosis.affected_file, ""
@@ -58,9 +63,11 @@ class RefactoringAgent(WatsonxAgent):
             "Fix the bug with the smallest possible change.\n"
             "Preserve unrelated behavior and existing code.\n"
             "The fix must make the failing test pass.\n\n"
+            f"RETRY INSTRUCTIONS:\n{retry_instructions or 'No retry; this is the initial attempt.'}\n\n"
             "OUTPUT RULES:\n"
             "Return ONLY a valid JSON object with one key: diff.\n"
             'The value of "diff" must be a Git diff string.\n'
+            'The diff must not be empty.\n'
             'The diff must start with "diff --git".\n'
             "Include the correct file paths and unified diff hunks.\n"
             "Use the exact affected file path given above.\n"

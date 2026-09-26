@@ -309,9 +309,19 @@ def run_pipeline(
 
         # Granite returns a JSON object containing the Git diff.
         raw_diff = refactor_agent.run(refactor_request).strip()
-
         def retry_refactor(error: str) -> str:
-            return refactor_agent.run(refactor_request).strip()
+            retry_instructions = (
+                "Your previous response could not be parsed or applied.\n"
+                f"Parser/application error: {error}\n"
+                "Return a corrected, non-empty Git diff in the required JSON "
+                "object. The diff must begin with 'diff --git' and modify "
+                f"'{state.diagnosis.affected_file}'. "
+                "Do not return an empty diff, Markdown, or code fences."
+            )
+            return refactor_agent.run(
+                refactor_request,
+                retry_instructions=retry_instructions,
+            ).strip()
 
         state.patch = parse_patch(
             raw_diff,
