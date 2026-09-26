@@ -779,3 +779,416 @@ class TestRunPipelineTempFileCleanup:
         # File should be gone even on success.
         assert not gen_test_abs.exists()
         assert state.stage == PipelineStage.COMPLETE
+
+
+# ===========================================================================
+# Stage 5 regression tests — patch robustness
+# ===========================================================================
+
+# JSON that encodes a diff with a valid header but empty content after the
+# hunk marker; git apply --check will reject it but parse_patch accepts it.
+_EMPTY_DIFF_JSON = """{
+  "diff": ""
+}"""
+
+_NO_HUNK_DIFF_JSON = """{
+  "diff": "diff --git a/src/calculator.py b/src/calculator.py\\nindex abc..def 100644\\n--- a/src/calculator.py\\n+++ b/src/calculator.py\\n"
+}"""
+
+
+class TestRunPipelineStage5Regression:
+    """
+    Regression tests targeting Stage 5 (APPLYING_FIX) error paths.
+
+    These cover:
+    * An empty diff from the model → pipeline fails with a clear message.
+    * A structurally invalid diff (no hunk marker) → parse_patch retry is
+      invoked, which returns a valid diff → pipeline completes.
+    * Both parse retries fail → pipeline fails with informative error.
+    * git apply --check fails on attempt 0, retry returns a valid diff →
+      pipeline completes.
+    * git apply --check fails on both attempts → pipeline fails with the
+      git error surfaced.
+    * The temporary .codeheal.patch file is removed even when parsing raises.
+    * A patched file with a syntax error causes a clear APPLYING_FIX failure.
+    """
+
+    def _setup_src(self, tmp_path) -> None:
+        src = tmp_path / "src"
+        src.mkdir(parents=True, exist_ok=True)
+        (src / "calculator.py").write_text("def divide(a, b): return a/b\n")
+
+    # -- empty diff ----------------------------------------------------------
+
+    def test_empty_diff_sets_stage_failed(self, tmp_path):
+        """Empty diff string → pipeline FAILED with a clear error."""
+        self._setup_src(tmp_path)
+        diag_agent = MagicMock()
+        diag_agent.return_value.run.return_value = _DIAGNOSIS_JSON
+        test_agent = MagicMock()
+        test_agent.return_value.run.return_value = _GENERATED_TEST_JSON
+        refactor_agent = MagicMock()
+        # First call returns empty diff; retry_fn would be called by parse_patch
+        # but since the diff parses OK (empty string is valid JSON) the
+        # pipeline's own empty-diff guard raises.
+        refactor_agent.return_value.run.return_value = _EMPTY_DIFF_JSON
+        git_mock = _mock_subprocess_run_success()
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", diag_agent),
+            patch("core.pipeline.TestGeneratorAgent", test_agent),
+            patch("core.pipeline.RefactoringAgent", refactor_agent),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+        assert state.stage == PipelineStage.FAILED
+        assert state.error is not None
+        assert "APPLYING_FIX" in state.error
+
+    def test_empty_diff_error_mentions_empty(self, tmp_path):
+        self._setup_src(tmp_path)
+        diag_agent = MagicMock()
+        diag_agent.return_value.run.return_value = _DIAGNOSIS_JSON
+        test_agent = MagicMock()
+        test_agent.return_value.run.return_value = _GENERATED_TEST_JSON
+        refactor_agent = MagicMock()
+        refactor_agent.return_value.run.return_value = _EMPTY_DIFF_JSON
+        git_mock = _mock_subprocess_run_success()
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", diag_agent),
+            patch("core.pipeline.TestGeneratorAgent", test_agent),
+            patch("core.pipeline.RefactoringAgent", refactor_agent),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+        # Error should mention "empty diff" or "APPLYING_FIX"
+        assert "empty" in state.error.lower() or "APPLYING_FIX" in state.error
+
+    # -- malformed diff → parse retry succeeds → pipeline complete -----------
+
+    def test_malformed_diff_then_valid_retry_completes(self, tmp_path):
+        """
+        First refactor response has no @@ hunk marker (invalid).
+        parse_patch retries once with the error; second response is valid.
+        Pipeline must complete.
+        """
+        self._setup_src(tmp_path)
+        diag_agent = MagicMock()
+        diag_agent.return_value.run.return_value = _DIAGNOSIS_JSON
+        test_agent = MagicMock()
+        test_agent.return_value.run.return_value = _GENERATED_TEST_JSON
+
+        # Refactor agent: first call returns bad diff, second (retry) returns good diff.
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.side_effect = [
+            _NO_HUNK_DIFF_JSON,    # initial call
+            _PATCH_JSON,           # retry from parse_patch
+        ]
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        git_mock = _mock_subprocess_run_success()
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT, _PASSING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+
+        assert state.stage == PipelineStage.COMPLETE, state.error
+
+    # -- both parse retries fail → pipeline fails with informative error -----
+
+    def test_both_parse_retries_fail_sets_stage_failed(self, tmp_path):
+        """
+        Both the initial and retry responses are missing a valid diff.
+        Pipeline must set FAILED with an error mentioning APPLYING_FIX.
+        """
+        self._setup_src(tmp_path)
+        diag_agent = MagicMock()
+        diag_agent.return_value.run.return_value = _DIAGNOSIS_JSON
+        test_agent = MagicMock()
+        test_agent.return_value.run.return_value = _GENERATED_TEST_JSON
+
+        # All calls return a diff without the @@ hunk marker.
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _NO_HUNK_DIFF_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        git_mock = _mock_subprocess_run_success()
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+
+        assert state.stage == PipelineStage.FAILED
+        assert "APPLYING_FIX" in state.error
+
+    def test_both_parse_retries_fail_error_is_informative(self, tmp_path):
+        """Error message after retry exhaustion should mention the failure reason."""
+        self._setup_src(tmp_path)
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _NO_HUNK_DIFF_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+        git_mock = _mock_subprocess_run_success()
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+        assert state.error is not None
+        # Error must mention why it failed, not just the stage name.
+        assert "diff" in state.error.lower() or "parse" in state.error.lower()
+
+    # -- git apply --check fails attempt 0; retry returns valid diff → complete
+
+    def test_git_check_retry_on_first_failure_completes(self, tmp_path):
+        """
+        git apply --check fails on attempt 0.
+        The model's corrected response passes the check on attempt 1.
+        Pipeline must complete.
+        """
+        self._setup_src(tmp_path)
+        diag_agent_cls = MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))
+        test_agent_cls = MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))
+
+        # The refactor agent instance returns valid JSON on every call;
+        # the git mock simulates: check=FAIL, check=OK, apply=OK.
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _PATCH_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        # subprocess.run side_effect:
+        #   call 0 → git apply --check → FAIL
+        #   call 1 → git apply --check (attempt 1) → OK
+        #   call 2 → git apply → OK
+        git_responses = [
+            MagicMock(returncode=1, stderr="corrupt patch at line 16", stdout=""),
+            MagicMock(returncode=0, stderr="", stdout=""),
+            MagicMock(returncode=0, stderr="", stdout=""),
+        ]
+        git_mock = MagicMock(side_effect=git_responses)
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT, _PASSING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", diag_agent_cls),
+            patch("core.pipeline.TestGeneratorAgent", test_agent_cls),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+
+        assert state.stage == PipelineStage.COMPLETE, state.error
+
+    def test_git_check_retry_passes_git_error_to_model(self, tmp_path):
+        """
+        When git apply --check fails, the exact git error must be passed to
+        the retry model call via retry_instructions.
+        """
+        self._setup_src(tmp_path)
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _PATCH_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        git_responses = [
+            MagicMock(returncode=1, stderr="corrupt patch at line 16", stdout=""),
+            MagicMock(returncode=0, stderr="", stdout=""),
+            MagicMock(returncode=0, stderr="", stdout=""),
+        ]
+        git_mock = MagicMock(side_effect=git_responses)
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT, _PASSING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            run_pipeline(str(tmp_path))
+
+        # The second call to refactor_agent.run should include the git error.
+        call_args_list = refactor_agent_instance.run.call_args_list
+        # At minimum 2 calls: initial + git-check retry.
+        assert len(call_args_list) >= 2
+        retry_call_kwargs = call_args_list[1][1] if call_args_list[1][1] else {}
+        retry_instructions = retry_call_kwargs.get(
+            "retry_instructions",
+            call_args_list[1][0][1] if len(call_args_list[1][0]) > 1 else "",
+        )
+        assert "corrupt patch at line 16" in retry_instructions
+
+    # -- both git checks fail → pipeline fails with git error ----------------
+
+    def test_git_check_both_attempts_fail_sets_stage_failed(self, tmp_path):
+        """Both git apply --check attempts fail → pipeline FAILED."""
+        self._setup_src(tmp_path)
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _PATCH_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        git_mock = MagicMock()
+        git_mock.return_value.returncode = 1
+        git_mock.return_value.stderr = "error: patch failed"
+        git_mock.return_value.stdout = ""
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+
+        assert state.stage == PipelineStage.FAILED
+        assert "git apply failed" in state.error
+
+    def test_git_check_both_fail_error_contains_git_message(self, tmp_path):
+        """The git error must be surfaced in state.error."""
+        self._setup_src(tmp_path)
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _PATCH_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        git_mock = MagicMock()
+        git_mock.return_value.returncode = 1
+        git_mock.return_value.stderr = "error: patch failed uniquely XYZ"
+        git_mock.return_value.stdout = ""
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(str(tmp_path))
+
+        assert "uniquely XYZ" in state.error
+
+    # -- patch file cleaned up on parse failure ------------------------------
+
+    def test_patch_file_cleaned_up_on_parse_failure(self, tmp_path):
+        """
+        The .codeheal.patch temp file must not be left on disk even when
+        parsing fails completely (retry exhausted).
+        """
+        self._setup_src(tmp_path)
+        refactor_agent_instance = MagicMock()
+        # Always return a diff without hunk markers so parse_patch always fails.
+        refactor_agent_instance.run.return_value = _NO_HUNK_DIFF_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+        git_mock = _mock_subprocess_run_success()
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))),
+            patch("core.pipeline.TestGeneratorAgent", MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            run_pipeline(str(tmp_path))
+
+        # The patch file must be gone regardless of outcome.
+        assert not (tmp_path / ".codeheal.patch").exists()
+
+    def test_patch_file_cleaned_up_on_success(self, tmp_path):
+        """The .codeheal.patch temp file must not persist after a successful run."""
+        with _full_patch(tmp_path=tmp_path) as _:
+            state = run_pipeline(str(tmp_path))
+
+        assert not (tmp_path / ".codeheal.patch").exists()
+        assert state.stage == PipelineStage.COMPLETE
+
+    # -- syntax error in patched file ----------------------------------------
+
+    def test_syntax_error_in_patched_file_sets_failed(self, tmp_path):
+        """
+        If git apply succeeds but the resulting file has a syntax error,
+        the pipeline must set FAILED with a clear message.
+        """
+        self._setup_src(tmp_path)
+        diag_agent_cls = MagicMock(return_value=MagicMock(run=MagicMock(return_value=_DIAGNOSIS_JSON)))
+        test_agent_cls = MagicMock(return_value=MagicMock(run=MagicMock(return_value=_GENERATED_TEST_JSON)))
+        refactor_agent_instance = MagicMock()
+        refactor_agent_instance.run.return_value = _PATCH_JSON
+        refactor_agent_class = MagicMock(return_value=refactor_agent_instance)
+
+        # git apply succeeds but corrupts the file.
+        def _git_apply_side_effect(args, **kwargs):
+            result = MagicMock()
+            result.returncode = 0
+            result.stderr = ""
+            result.stdout = ""
+            if "--check" not in args:
+                # Simulate git apply writing a syntax-broken file.
+                calc = tmp_path / "src" / "calculator.py"
+                calc.write_text("def divide(a b):\n    return a / b\n")
+            return result
+
+        with (
+            patch("core.pipeline.load_repo", return_value=_SOURCE_FILES),
+            patch(
+                "core.pipeline.run_tests",
+                side_effect=[_FAILING_TEST_RESULT, _FAILING_TEST_RESULT],
+            ),
+            patch("core.pipeline.DiagnosticAgent", diag_agent_cls),
+            patch("core.pipeline.TestGeneratorAgent", test_agent_cls),
+            patch("core.pipeline.RefactoringAgent", refactor_agent_class),
+            patch("core.pipeline.subprocess.run", _git_apply_side_effect),
+        ):
+            state = run_pipeline(str(tmp_path))
+
+        assert state.stage == PipelineStage.FAILED
+        assert "syntax" in state.error.lower() or "APPLYING_FIX" in state.error

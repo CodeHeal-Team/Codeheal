@@ -911,3 +911,156 @@ class TestTempFileAndConfirmedFailing:
         assert not gen_test_path.exists(), (
             f"Generated test file was not cleaned up: {gen_test_path}"
         )
+
+
+# ===========================================================================
+# Integration: Stage 5 (APPLYING_FIX) retry scenarios with real agents
+# ===========================================================================
+
+class TestRealAgentsPipelineRefactorRetry:
+    """
+    Integration tests that exercise Stage 5 retry paths using real agent
+    classes wired to mocked watsonx responses.
+
+    These are distinct from the unit-level tests in test_pipeline.py because
+    they exercise the full agent class hierarchy (real _build_prompt, real
+    response parsing) rather than bypassing agents with MagicMock stubs.
+    """
+
+    _SCENARIO = str(SAMPLES_DIR / "none_bug")
+
+    def test_refactor_parse_retry_exhausted_sets_pipeline_failed(self):
+        """
+        Both the initial and the retry response from RefactoringAgent are
+        structurally invalid (no @@ hunk marker).
+        The pipeline must reach FAILED with a meaningful error.
+        """
+        bad_patch = json.dumps({
+            "diff": (
+                "diff --git a/src/calculator.py b/src/calculator.py\n"
+                "--- a/src/calculator.py\n"
+                "+++ b/src/calculator.py\n"
+                # Intentionally missing @@ hunk marker
+            )
+        })
+
+        diag_model = _make_mock_model([_DIAG_JSON_NONE_BUG])
+        test_gen_model = _make_mock_model([_TEST_GEN_JSON_NONE_BUG])
+        # Both initial and retry return the invalid patch.
+        refactor_model = _make_mock_model([bad_patch, bad_patch])
+
+        git_mock = MagicMock()
+        git_mock.return_value.returncode = 0
+        git_mock.return_value.stderr = ""
+
+        run_tests_mock = MagicMock(side_effect=[_FAILING, _FAILING])
+
+        env_patch = {"WATSONX_API_KEY": "k", "WATSONX_PROJECT_ID": "p"}
+        with (
+            patch.dict(os.environ, env_patch, clear=False),
+            patch("agents.base_agent._resolve_model_id", return_value=PINNED_MODEL),
+            patch("agents.base_agent.Credentials", return_value=MagicMock()),
+            patch("agents.base_agent.ModelInference", side_effect=[
+                diag_model, test_gen_model, refactor_model
+            ]),
+            patch("core.pipeline.DiagnosticAgent", DiagnosticAgent),
+            patch("core.pipeline.TestGeneratorAgent", TestGeneratorAgent),
+            patch("core.pipeline.RefactoringAgent", RefactoringAgent),
+            patch("core.pipeline.run_tests", run_tests_mock),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(self._SCENARIO)
+
+        assert state.stage == PipelineStage.FAILED
+        assert state.error is not None
+        assert "APPLYING_FIX" in state.error
+
+    def test_refactor_git_check_retry_succeeds(self):
+        """
+        The first response is valid JSON+diff but git apply --check rejects it.
+        The second response (after retry) also passes the check.
+        Pipeline must complete.
+        """
+        diag_model = _make_mock_model([_DIAG_JSON_NONE_BUG])
+        test_gen_model = _make_mock_model([_TEST_GEN_JSON_NONE_BUG])
+        # Both responses are the same valid patch JSON.
+        refactor_model = _make_mock_model([_PATCH_JSON_NONE_BUG, _PATCH_JSON_NONE_BUG])
+
+        # subprocess.run side_effects:
+        #   0 → git apply --check → FAIL (corrupt patch)
+        #   1 → git apply --check (retry) → OK
+        #   2 → git apply → OK
+        git_responses = [
+            MagicMock(returncode=1, stderr="corrupt patch at line 16", stdout=""),
+            MagicMock(returncode=0, stderr="", stdout=""),
+            MagicMock(returncode=0, stderr="", stdout=""),
+        ]
+        git_mock = MagicMock(side_effect=git_responses)
+
+        run_tests_mock = MagicMock(side_effect=[_FAILING, _FAILING, _PASSING])
+
+        env_patch = {"WATSONX_API_KEY": "k", "WATSONX_PROJECT_ID": "p"}
+        with (
+            patch.dict(os.environ, env_patch, clear=False),
+            patch("agents.base_agent._resolve_model_id", return_value=PINNED_MODEL),
+            patch("agents.base_agent.Credentials", return_value=MagicMock()),
+            patch("agents.base_agent.ModelInference", side_effect=[
+                diag_model, test_gen_model, refactor_model
+            ]),
+            patch("core.pipeline.DiagnosticAgent", DiagnosticAgent),
+            patch("core.pipeline.TestGeneratorAgent", TestGeneratorAgent),
+            patch("core.pipeline.RefactoringAgent", RefactoringAgent),
+            patch("core.pipeline.run_tests", run_tests_mock),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            state = run_pipeline(self._SCENARIO)
+
+        assert state.stage == PipelineStage.COMPLETE, state.error
+        assert state.patch.validated is True
+
+    def test_patch_temp_file_absent_after_failed_apply(self):
+        """
+        After a completely failed Stage 5 (both retries exhausted),
+        the .codeheal.patch file must not remain on disk.
+        """
+        bad_patch = json.dumps({
+            "diff": (
+                "diff --git a/src/calculator.py b/src/calculator.py\n"
+                "--- a/src/calculator.py\n"
+                "+++ b/src/calculator.py\n"
+            )
+        })
+
+        diag_model = _make_mock_model([_DIAG_JSON_NONE_BUG])
+        test_gen_model = _make_mock_model([_TEST_GEN_JSON_NONE_BUG])
+        refactor_model = _make_mock_model([bad_patch, bad_patch])
+
+        git_mock = MagicMock()
+        git_mock.return_value.returncode = 0
+        git_mock.return_value.stderr = ""
+        run_tests_mock = MagicMock(side_effect=[_FAILING, _FAILING])
+
+        scenario_path = Path(self._SCENARIO)
+        patch_file = scenario_path / ".codeheal.patch"
+        if patch_file.exists():
+            patch_file.unlink()
+
+        env_patch = {"WATSONX_API_KEY": "k", "WATSONX_PROJECT_ID": "p"}
+        with (
+            patch.dict(os.environ, env_patch, clear=False),
+            patch("agents.base_agent._resolve_model_id", return_value=PINNED_MODEL),
+            patch("agents.base_agent.Credentials", return_value=MagicMock()),
+            patch("agents.base_agent.ModelInference", side_effect=[
+                diag_model, test_gen_model, refactor_model
+            ]),
+            patch("core.pipeline.DiagnosticAgent", DiagnosticAgent),
+            patch("core.pipeline.TestGeneratorAgent", TestGeneratorAgent),
+            patch("core.pipeline.RefactoringAgent", RefactoringAgent),
+            patch("core.pipeline.run_tests", run_tests_mock),
+            patch("core.pipeline.subprocess.run", git_mock),
+        ):
+            run_pipeline(self._SCENARIO)
+
+        assert not patch_file.exists(), (
+            f".codeheal.patch was not cleaned up: {patch_file}"
+        )

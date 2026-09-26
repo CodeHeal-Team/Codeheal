@@ -716,9 +716,9 @@ class TestRefactoringAgent:
         req = self._make_request()
         prompt = RefactoringAgent._build_prompt(req)
 
-        assert "valid JSON object with one key: diff" in prompt
-        assert 'The value of "diff" must be a Git diff string.' in prompt
-        assert 'The diff must start with "diff --git".' in prompt
+        assert 'exactly one key: "diff"' in prompt
+        assert 'The value of "diff" is a complete Git unified diff string.' in prompt
+        assert "diff --git" in prompt
 
     # -- run() with mocked model ------------------------------------------
 

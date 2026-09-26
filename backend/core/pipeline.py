@@ -308,44 +308,83 @@ def run_pipeline(
         patch_file = repo_root / ".codeheal.patch"
         target_file = repo_root / state.diagnosis.affected_file
 
-        def retry_refactor(error: str) -> str:
-            retry_instructions = (
+        # ---- retry helpers ------------------------------------------------
+
+        def _build_parse_retry_instructions(error: str) -> str:
+            return (
                 "Your previous response was invalid.\n"
-                f"Exact error: {error}\n"
+                f"Exact parse error: {error}\n"
                 "Return a corrected, non-empty Git diff inside the required "
                 "JSON object with one key: diff. The diff must start with "
-                "'diff --git', contain valid unified diff hunk headers and "
-                "line counts, and modify the exact affected file shown in "
-                "the prompt. Do not return Markdown or code fences."
+                "'diff --git', contain valid unified diff hunk headers (@@) "
+                "with correct line counts, and modify the exact affected file "
+                "path shown in the prompt. Do not return Markdown or code "
+                "fences. Do not add any text outside the JSON object."
             )
+
+        def _build_git_retry_instructions(git_error: str) -> str:
+            return (
+                "Git rejected your previous patch.\n"
+                f"Exact Git error: {git_error}\n"
+                "Generate a complete corrected Git diff. Verify the file "
+                "path, the context lines (prefixed with a space), removed "
+                "lines (prefixed with -), and added lines (prefixed with +). "
+                "Recount the hunk header line numbers and counts carefully. "
+                "The hunk format is: @@ -<old_start>,<old_count> "
+                "+<new_start>,<new_count> @@\n"
+                "Return only the required JSON object with a non-empty diff "
+                "string. Do not return Markdown or code fences."
+            )
+
+        def _retry_refactor_parse(error: str) -> str:
+            """Called by parse_patch on a parse/structure failure."""
             return refactor_agent.run(
                 refactor_request,
-                retry_instructions=retry_instructions,
+                retry_instructions=_build_parse_retry_instructions(error),
             ).strip()
 
-        raw_diff = refactor_agent.run(refactor_request).strip()
         patch_applied = False
 
+        # ---- attempt loop: up to 2 round-trips with the model -------------
+        # Attempt 0: initial model call.
+        # Attempt 1: only reached when git apply --check failed on attempt 0;
+        #            a new raw response is obtained with the git error message.
+        # parse_patch internally performs one additional retry (via retry_fn)
+        # when the response fails structural validation, so the model may be
+        # called up to 4 times in the worst case.
+
+        raw_diff = refactor_agent.run(refactor_request).strip()
+
         try:
-            # Allow at most two patch attempts.
             for attempt in range(2):
-                # Parse the model response. If parsing fails, parse_patch
-                # invokes retry_refactor with the actual parsing error.
-                state.patch = parse_patch(
-                    raw_diff,
-                    retry_fn=retry_refactor,
-                    repo_path=str(repo_root),
-                )
+                # Parse the model response; parse_patch calls _retry_refactor_parse
+                # once if the response is structurally invalid.
+                try:
+                    state.patch = parse_patch(
+                        raw_diff,
+                        retry_fn=_retry_refactor_parse,
+                        repo_path=str(repo_root),
+                    )
+                except Exception as parse_exc:  # noqa: BLE001
+                    # parse_patch exhausted its one internal retry.
+                    # On the first attempt, propagate as a recoverable error;
+                    # on the second attempt (already a git-check retry) there
+                    # is nothing more to do.
+                    raise RuntimeError(
+                        f"Failed to parse a valid diff from the model "
+                        f"(attempt {attempt + 1}/2): {parse_exc}"
+                    ) from parse_exc
 
                 diff = state.patch.diff
                 if not diff or not diff.strip():
-                    raise ValueError(
-                        "Refactoring agent returned an empty diff"
+                    raise RuntimeError(
+                        "Refactoring agent returned an empty diff "
+                        f"(attempt {attempt + 1}/2)."
                     )
 
                 patch_file.write_text(diff, encoding="utf-8")
 
-                # Check the patch before modifying any source file.
+                # Pre-check: never apply a patch that git would reject.
                 check_result = subprocess.run(
                     ["git", "apply", "--check", str(patch_file)],
                     cwd=str(repo_root),
@@ -362,28 +401,20 @@ def run_pipeline(
                     )
 
                     if attempt == 1:
+                        # Second attempt also rejected — surface the git error.
                         raise RuntimeError(
                             "git apply failed (pre-check) after retry: "
                             f"{git_error}"
                         )
 
-                    # Ask the model to correct the actual Git error.
+                    # Ask the model to correct the patch using the exact git error.
                     raw_diff = refactor_agent.run(
                         refactor_request,
-                        retry_instructions=(
-                            "Git rejected your previous patch.\n"
-                            f"Exact Git error: {git_error}\n"
-                            "Generate a complete corrected Git diff. Check "
-                            "the file paths, unified diff hunk headers, and "
-                            "added/removed line counts against the current "
-                            "file content. Return only the required JSON "
-                            "object with a non-empty diff string."
-                        ),
+                        retry_instructions=_build_git_retry_instructions(git_error),
                     ).strip()
-
                     continue
 
-                # Apply only after the pre-check succeeds.
+                # Pre-check passed — apply the patch.
                 apply_result = subprocess.run(
                     ["git", "apply", str(patch_file)],
                     cwd=str(repo_root),
@@ -407,14 +438,21 @@ def run_pipeline(
 
             if not patch_applied:
                 raise RuntimeError(
-                    "Could not produce an applicable patch after retry"
+                    "Could not produce an applicable patch after retry."
                 )
 
-            # Validate the resulting Python file.
+            # Validate the patched Python file (syntax check only).
             if target_file.suffix == ".py":
-                ast.parse(target_file.read_text(encoding="utf-8"))
+                try:
+                    ast.parse(target_file.read_text(encoding="utf-8"))
+                except SyntaxError as syn_exc:
+                    raise RuntimeError(
+                        f"Applied patch introduced a syntax error in "
+                        f"{state.diagnosis.affected_file}: {syn_exc}"
+                    ) from syn_exc
 
         finally:
+            # Always remove the temporary patch file.
             patch_file.unlink(missing_ok=True)
 
         print(f"Fixed file applied: {state.diagnosis.affected_file}")
