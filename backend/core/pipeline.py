@@ -457,7 +457,7 @@ def run_pipeline(
                             for line in response_lines:
                                 if line.strip().startswith("```"):
                                     if in_fence:
-                                        candidates.append("\\n".join(fence_lines))
+                                        candidates.append("\n".join(fence_lines))
                                         fence_lines = []
                                         in_fence = False
                                     else:
@@ -467,7 +467,7 @@ def run_pipeline(
                                     fence_lines.append(line)
                             candidates.append(corrected_content)
                             candidates.extend(
-                                "\\n".join(response_lines[offset:])
+                                "\n".join(response_lines[offset:])
                                 for offset in range(1, len(response_lines))
                             )
 
