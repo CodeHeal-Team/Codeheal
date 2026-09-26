@@ -206,3 +206,9 @@ Potential improvements include supporting more programming languages, integratin
 ---
 
 Built for the IBM watsonx Hackathon.
+
+## IBM Bob 2.0 Development Evidence
+
+Screenshots documenting IBM Bob 2.0's assistance with the CodeHeal project will be collected in [`docs/bob-evidence/`](docs/bob-evidence/). The folder README describes the evidence screenshots to add, including task-session summaries, module validation, and integration-test results.
+
+**Note:** The evidence folder guide is present; add the actual screenshots before submitting the project.
