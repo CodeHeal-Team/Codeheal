@@ -1,6 +1,6 @@
 # CodeHeal — AI-Powered Automated Bug Diagnosis & Repair
 
-CodeHeal is an AI-powered debugging and code repair platform built for the IBM watsonx Hackathon. It helps developers identify bugs, understand their root causes, generate reproducible tests, apply code fixes, and verify those fixes through automated testing.
+CodeHeal is an AI-powered debugging and code repair platform built for the IBM Bob 2.0 Hackathon. It helps developers identify bugs, understand their root causes, generate reproducible tests, apply code fixes, and verify those fixes through automated testing.
 
 ## Live Demo
 
@@ -210,7 +210,7 @@ Potential improvements include supporting more programming languages, integratin
 
 ---
 
-Built for the IBM watsonx Hackathon.
+Built for the IBM Bob 2.0 Hackathon.
 
 ## IBM Bob 2.0 Development Evidence
 
