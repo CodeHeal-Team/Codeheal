@@ -7,7 +7,7 @@ CodeHeal is an AI-powered debugging and code repair platform built for the IBM B
 * **Frontend:** https://codeheal-frontend.vercel.app
 * **Backend API:** https://codeheal-backend.onrender.com
 * **API Documentation:** https://codeheal-backend.onrender.com/docs
-* **Demo Video:** https://drive.google.com/file/d/195o--mRDHAvW467eQBq6rCZftiRjLi1W/view?usp=sharing
+* **Demo Video:** https://drive.google.com/file/d/1nOI36hJtUGQqnnoOSUXrHmR3yEqQd2IE/view?usp=drivesdk
 
 > Note: The backend runs on Render's free tier and may take some time to wake up after a period of inactivity.
 
